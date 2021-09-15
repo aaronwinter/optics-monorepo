@@ -11,4 +11,5 @@ members = [
     # "agents/watcher",
     "agents/processor",
     "kms-cli",
+    "balance-exporter"
 ]
