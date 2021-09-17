@@ -13,16 +13,9 @@ use std::{
 use tokio::{sync::RwLock, task::JoinHandle, time::sleep};
 use tracing::{error, info, info_span, instrument, instrument::Instrumented, Instrument};
 
-use optics_base::{
-    AgentCore, OpticsAgent,
-    cancel_task, decl_agent,
-    Homes,
-    Replicas,
-};
+use optics_base::{cancel_task, decl_agent, AgentCore, Homes, OpticsAgent, Replicas};
 use optics_core::{
-    accumulator::merkle::Proof,
-    db::DB,
-    traits::{CommittedMessage, Common, Home, MessageStatus},
+    accumulator::merkle::Proof, db::DB, CommittedMessage, Common, Home, MessageStatus,
 };
 
 use crate::{prover::Prover, prover_sync::ProverSync, settings::ProcessorSettings as Settings};
@@ -58,7 +51,7 @@ impl Replica {
     fn main(self) -> JoinHandle<Result<()>> {
         tokio::spawn(
             async move {
-                use optics_core::traits::Replica;
+                use optics_core::Replica;
 
                 let domain = self.replica.local_domain();
 
@@ -91,7 +84,7 @@ impl Replica {
                 );
 
                 loop {
-                    use optics_core::traits::Replica;
+                    use optics_core::Replica;
                     let seq_span = tracing::trace_span!(
                         "ReplicaProcessor",
                         name = self.replica.name(),
@@ -135,7 +128,7 @@ impl Replica {
     /// In case of error: send help?
     #[instrument(err, skip(self), fields(self = %self))]
     async fn try_msg_by_domain_and_nonce(&self, domain: u32, nonce: u32) -> Result<bool> {
-        use optics_core::traits::Replica;
+        use optics_core::Replica;
 
         let message = match self.home.message_by_nonce(domain, nonce).await {
             Ok(Some(m)) => m,
@@ -209,7 +202,7 @@ impl Replica {
     #[instrument(err, level = "trace", skip(self), fields(self = %self))]
     /// Dispatch a message for processing. If the message is already proven, process only.
     async fn process(&self, message: CommittedMessage, proof: Proof) -> Result<()> {
-        use optics_core::traits::Replica;
+        use optics_core::Replica;
         let status = self.replica.message_status(message.to_leaf()).await?;
 
         match status {

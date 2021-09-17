@@ -4,7 +4,7 @@ use optics_base::Homes;
 use optics_core::{
     accumulator::{incremental::IncrementalMerkle, INITIAL_ROOT},
     db::{DbError, DB},
-    traits::{ChainCommunicationError, Common},
+    ChainCommunicationError, Common,
 };
 use std::{fmt::Display, ops::Range, sync::Arc, time::Duration};
 use tokio::time::sleep;
