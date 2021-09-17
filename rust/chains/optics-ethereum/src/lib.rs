@@ -24,9 +24,6 @@ mod replica;
 #[cfg(not(doctest))]
 mod xapp;
 
-/// Configuration structs
-pub mod settings;
-
 /// Ethereum connection configuration
 #[derive(Debug, serde::Deserialize, Clone)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -46,6 +43,7 @@ pub enum Connection {
 #[cfg(not(doctest))]
 pub use crate::{home::EthereumHome, replica::EthereumReplica, xapp::EthereumConnectionManager};
 
+#[allow(dead_code)]
 /// A live connection to an ethereum-compatible chain.
 pub struct Chain<P> {
     creation_metadata: Connection,
@@ -54,7 +52,11 @@ pub struct Chain<P> {
 
 contract!(make_replica, EthereumReplica, Replica,);
 contract!(make_home, EthereumHome, Home, db: optics_core::db::DB);
-contract!(make_conn_manager, EthereumConnectionManager, ConnectionManager,);
+contract!(
+    make_conn_manager,
+    EthereumConnectionManager,
+    ConnectionManager,
+);
 
 /*
 impl Chain<ethers::providers::Ws> {
