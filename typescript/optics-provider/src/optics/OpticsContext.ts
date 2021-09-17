@@ -1,6 +1,6 @@
-import { BigNumberish, ContractTransaction, ethers } from 'ethers';
+import { BigNumberish, ethers } from 'ethers';
 import { MultiProvider } from '..';
-import { ERC20, ERC20__factory } from '@optics-xyz/ts-interface/optics-xapps';
+import { xapps, core } from '@optics-xyz/ts-interface';
 import { BridgeContracts } from './contracts/BridgeContracts';
 import { CoreContracts } from './contracts/CoreContracts';
 import { ResolvedTokenInfo, TokenIdentifier } from './tokens';
@@ -11,7 +11,7 @@ import {
   OpticsDomain,
   stagingDomains,
 } from './domains';
-import { Replica } from '@optics-xyz/ts-interface/optics-core';
+import { TransferMessage } from './messages';
 
 type Address = string;
 
@@ -85,16 +85,32 @@ export class OpticsContext extends MultiProvider {
     return this.cores.get(domain);
   }
 
+  mustGetCore(nameOrDomain: string | number): CoreContracts {
+    const core = this.getCore(nameOrDomain);
+    if (!core) {
+      throw new Error(`Missing core for domain: ${nameOrDomain}`);
+    }
+    return core;
+  }
+
   getBridge(nameOrDomain: string | number): BridgeContracts | undefined {
     const domain = this.resolveDomain(nameOrDomain);
     return this.bridges.get(domain);
+  }
+
+  mustGetBridge(nameOrDomain: string | number): BridgeContracts {
+    const bridge = this.getBridge(nameOrDomain);
+    if (!bridge) {
+      throw new Error(`Missing bridge for domain: ${nameOrDomain}`);
+    }
+    return bridge;
   }
 
   // gets the replica of Home on Remote
   getReplicaFor(
     home: string | number,
     remote: string | number,
-  ): Replica | undefined {
+  ): core.Replica | undefined {
     return this.getCore(remote)?.replicas.get(this.resolveDomain(home))
       ?.contract;
   }
@@ -103,7 +119,7 @@ export class OpticsContext extends MultiProvider {
   async resolveTokenRepresentation(
     nameOrDomain: string | number,
     token: TokenIdentifier,
-  ): Promise<ERC20 | undefined> {
+  ): Promise<xapps.ERC20 | undefined> {
     const domain = this.resolveDomain(nameOrDomain);
     const bridge = this.getBridge(domain);
 
@@ -118,7 +134,7 @@ export class OpticsContext extends MultiProvider {
       return;
     }
 
-    let contract = new ERC20__factory().attach(address);
+    let contract = new xapps.ERC20__factory().attach(address);
 
     const connection = this.getConnection(domain);
     if (connection) {
@@ -131,7 +147,7 @@ export class OpticsContext extends MultiProvider {
   async tokenRepresentations(
     token: TokenIdentifier,
   ): Promise<ResolvedTokenInfo> {
-    const tokens: Map<number, ERC20> = new Map();
+    const tokens: Map<number, xapps.ERC20> = new Map();
 
     await Promise.all(
       this.domainNumbers.map(async (domain) => {
@@ -153,10 +169,7 @@ export class OpticsContext extends MultiProvider {
     nameOrDomain: string | number,
     representation: Address,
   ): Promise<TokenIdentifier | undefined> {
-    const bridge = this.getBridge(nameOrDomain);
-    if (!bridge) {
-      throw new Error(`Bridge not available on ${nameOrDomain}`);
-    }
+    const bridge = this.mustGetBridge(nameOrDomain);
 
     const token = await bridge.bridgeRouter.getCanonicalAddress(representation);
     if (token[0] === 0) {
@@ -175,22 +188,15 @@ export class OpticsContext extends MultiProvider {
     token: TokenIdentifier,
     amount: BigNumberish,
     recipient: Address,
-  ): Promise<ContractTransaction> {
-    const fromBridge = this.getBridge(from);
-    if (!fromBridge) {
-      throw new Error(`Bridge not available on ${from}`);
-    }
+    overrides: ethers.Overrides = {},
+  ): Promise<TransferMessage> {
+    const fromBridge = this.mustGetBridge(from);
+    const bridgeAddress = fromBridge.bridgeRouter.address;
 
     const fromToken = await this.resolveTokenRepresentation(from, token);
     if (!fromToken) {
       throw new Error(`Token not available on ${from}`);
     }
-
-    const bridgeAddress = fromBridge?.bridgeRouter.address;
-    if (!bridgeAddress) {
-      throw new Error(`No bridge for ${from}`);
-    }
-
     const sender = this.getSigner(from);
     if (!sender) {
       throw new Error(`No signer for ${from}`);
@@ -198,18 +204,26 @@ export class OpticsContext extends MultiProvider {
     const senderAddress = await sender.getAddress();
 
     const approved = await fromToken.allowance(senderAddress, bridgeAddress);
-
     // Approve if necessary
     if (approved.lt(amount)) {
-      await fromToken.approve(bridgeAddress, amount);
+      await fromToken.approve(bridgeAddress, amount, overrides);
     }
 
-    return fromBridge.bridgeRouter.send(
+    const tx = await fromBridge.bridgeRouter.send(
       fromToken.address,
       amount,
-      to,
-      recipient,
+      this.resolveDomain(to),
+      canonizeId(recipient),
+      overrides,
     );
+    const receipt = await tx.wait();
+
+    const message = TransferMessage.fromReceipt(receipt, this);
+    if (!message) {
+      throw new Error();
+    }
+
+    return message as TransferMessage;
   }
 
   async sendNative(
@@ -217,15 +231,26 @@ export class OpticsContext extends MultiProvider {
     to: string | number,
     amount: BigNumberish,
     recipient: Address,
-  ): Promise<ContractTransaction> {
-    const ethHelper = this.getBridge(from)?.ethHelper;
+    overrides: ethers.PayableOverrides = {},
+  ): Promise<TransferMessage> {
+    const ethHelper = this.mustGetBridge(from).ethHelper;
     if (!ethHelper) {
       throw new Error(`No ethHelper for ${from}`);
     }
 
     const toDomain = this.resolveDomain(to);
 
-    return ethHelper.sendToEVMLike(toDomain, recipient, { value: amount });
+    overrides.value = amount;
+
+    const tx = await ethHelper.sendToEVMLike(toDomain, recipient, overrides);
+    const receipt = await tx.wait();
+
+    const message = TransferMessage.fromReceipt(receipt, this);
+    if (!message) {
+      throw new Error();
+    }
+
+    return message as TransferMessage;
   }
 }
 
