@@ -23,11 +23,11 @@ use optics_base::{
 };
 use optics_core::{
     db::DB,
-    traits::{ChainCommunicationError, Common, ConnectionManager, DoubleUpdate, Home, TxOutcome},
+    ChainCommunicationError, Common, ConnectionManager, DoubleUpdate, Home, TxOutcome,
     FailureNotification, SignedUpdate, Signers,
 };
 
-use crate::settings::WatcherSettings as Settings;
+use crate::settings::WatcherSettings;
 
 #[derive(Debug, Error)]
 enum WatcherError {
@@ -255,6 +255,10 @@ impl Watcher {
         }
     }
 
+    async fn from_settings(settings: WatcherSettings) -> Result<Self> {
+        unimplemented!()
+    }
+    
     async fn shutdown(&self) {
         for (_, v) in self.watch_tasks.write().await.drain() {
             cancel_task!(v);
@@ -307,7 +311,6 @@ impl Watcher {
 }
 
 #[async_trait]
-#[allow(clippy::unit_arg)]
 impl OpticsAgent for Watcher {
     const AGENT_NAME: &'static str = "watcher";
 
@@ -358,7 +361,8 @@ impl OpticsAgent for Watcher {
     }
 
     #[tracing::instrument(err)]
-    async fn run_many(&self, replicas: &[&str]) -> Result<()> {
+    fn run_many(&self, replicas: &[&str]) -> Instrumented<tokio::task::JoinHandle<Result<()>>>{
+        let fut = async {
         let (tx, rx) = mpsc::channel(200);
         let handler = UpdateHandler::new(rx, self.db(), self.home()).spawn();
 
@@ -418,6 +422,8 @@ impl OpticsAgent for Watcher {
             Watcher has been shut down!
         "#
         )
+    };
+    tokio::spawn(fut).in_current_span().expect("watcher spawned")
     }
 }
 
@@ -430,8 +436,8 @@ mod test {
     use ethers::core::types::H256;
     use ethers::signers::{LocalWallet, Signer};
 
-    use optics_base::Replicas};
-    use optics_core::{traits::DoubleUpdate, SignedFailureNotification, Update};
+    use optics_base::Replicas;
+    use optics_core::{DoubleUpdate, SignedFailureNotification, Update};
     use optics_test::{
         mocks::{MockConnectionManagerContract, MockHomeContract, MockReplicaContract},
         test_utils,
@@ -794,7 +800,7 @@ mod test {
                 db: db,
                 indexer: IndexSettings::default(),
                 metrics: Arc::new(
-                    optics_base::new(
+                    optics_base::CoreMetrics::new(
                         "watcher_test",
                         None,
                         Arc::new(prometheus::Registry::new()),

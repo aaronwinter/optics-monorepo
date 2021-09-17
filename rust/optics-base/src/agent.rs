@@ -34,7 +34,7 @@ pub struct AgentCore {
 /// and:
 ///     a reference to a home.
 #[async_trait]
-pub trait OpticsAgent: Send + Sync + std::fmt::Debug + AsRef<AgentCore> {
+pub trait OpticsAgent: Send + Sync + std::fmt::Debug + AsRef<AgentCore> + Sized {
     /// The agent's name
     const AGENT_NAME: &'static str;
 
@@ -42,9 +42,7 @@ pub trait OpticsAgent: Send + Sync + std::fmt::Debug + AsRef<AgentCore> {
     type Settings: AsRef<Settings>;
 
     /// Instantiate the agent from the standard settings object
-    async fn from_settings(settings: Self::Settings) -> Result<Self>
-    where
-        Self: Sized;
+    async fn from_settings(settings: Self::Settings) -> Result<Self>;
 
     /// Return a handle to the metrics registry
     fn metrics(&self) -> Arc<CoreMetrics> {
