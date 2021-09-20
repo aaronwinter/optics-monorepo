@@ -108,7 +108,8 @@ impl HomeDB {
         self.retrieve_decodable("", LATEST_LEAF)
     }
 
-    /// Store the leaf_hash keyed by leaf_index
+    /// Store the leaf_hash twice, once keyed by leaf_index and once keyed by 
+    /// destination_and_nonce
     fn store_leaf(
         &self,
         leaf_index: u32,
