@@ -1,10 +1,15 @@
 node_modules
 test_deploy.env
 
-typescript/optics-deploy/.env
 
 rust/vendor/
 rust/tmp_db
 rust/tmp.env
 tmp.env
 .DS_STORE
+
+typescript/*/.env
+typescript/*/node_modules
+typescript/**/tsconfig.tsbuildinfo
+**/**/tsconfig.tsbuildinfo
+typescript/optics-provider/src/tmp.ts
